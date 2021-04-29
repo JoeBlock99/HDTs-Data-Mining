@@ -1,0 +1,227 @@
+---
+title: "HT 5. Naive Bayes"
+author: "Juan De Leon, Maria Jose Castro, Jose Block"
+date: "28/03/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## - Naive Bayes 
+
+```{r echo=FALSE, warning=FALSE}
+library(e1071)
+library(caret)
+# Load Data
+df = read.csv("./train.csv")
+df$tipoDeCasa = as.numeric(as.character( cut(df$SalePrice,c(0,145000,205000,410000), labels = c(1, 2, 3))))
+
+# Select Data
+porciento <- 70/100
+frstselect <- subset (df, select = -c(1,81))
+trainRowsNumber<-sample(1:nrow(frstselect),porciento*nrow(frstselect))
+train<-frstselect[trainRowsNumber,]
+test<-frstselect[-trainRowsNumber,]
+
+# Modelo de Naive Bayes
+train$tipoDeCasa <- factor(train$tipoDeCasa)
+modelo<-naiveBayes(train$tipoDeCasa~., data=train)
+```
+A continuacion se puede ver el modelo dado por Naive Bayes:
+```{r echo=FALSE, warning=FALSE }
+modelo
+predBayes<-predict(modelo, newdata = test)
+```
+Un resumen de los resultados de la prediccion de Naive Bayes:
+```{r echo=FALSE, warning=FALSE }
+summary(predBayes)
+```
+Matriz de confusion:
+```{r echo=FALSE, warning=FALSE }
+cm<-confusionMatrix(predBayes,factor(test$tipoDeCasa))
+cm
+```
+Con el uso de todas las variables de la base de datos,se pudo obtener el modelo de Naive Bayes. Se hizo la prediccion y segun la matriz de confusion, tiene una precision entre 65% y 75%. En este caso se uso el 70% delos datos como grupo de entrenamiento para mantener el mismo en todos los modelos antes trabajados. Sugerimos aumentar la cantidad de datos o en este caso el porcentaje, para tener una prediccion mas precisa. A continuacion se da una muestra con un 80% de grupo de entrenamiento.
+
+```{r echo=FALSE, warning=FALSE}
+# Select Data
+porcentaje <- 80/100
+frstselect <- subset (df, select = -c(1,81))
+trainRowsNum<-sample(1:nrow(frstselect),porcentaje*nrow(frstselect))
+train2<-frstselect[trainRowsNum,]
+test2<-frstselect[-trainRowsNum,]
+
+# Modelo de Naive Bayes
+train2$tipoDeCasa <- factor(train2$tipoDeCasa)
+modelo2<-naiveBayes(train2$tipoDeCasa~., data=train2)
+```
+A continuacion se puede ver el modelo dado por Naive Bayes:
+```{r echo=FALSE, warning=FALSE }
+predBayes2<-predict(modelo2, newdata = test2)
+```
+Un resumen de los resultados de la prediccion de Naive Bayes:
+```{r echo=FALSE, warning=FALSE }
+summary(predBayes2)
+```
+Matriz de confusion:
+```{r echo=FALSE, warning=FALSE }
+cm2<-confusionMatrix(predBayes2,factor(test2$tipoDeCasa))
+cm2
+```
+Los resultados son bastante parecidos a pesar de ser 80% de entrenamiento, hay corridas en las que sale victorioso el 70% de entrenamiento.
+
+##Analisis de Modelo
+
+Al obtener un nivel de accuracy tan grande y porcentajes de comportamiento tan similares, surge la cuestionane si el algoritmo no sufrio un overfittin es decir un reajuste que haga al algoritmo util unicamente para este set de informacion, para poder demostrar esto se usara la Cross Valitacion y se compararan los resultados para determinar la posible existencia del mismo. 
+
+Para poder determinar si realmente existe un overfitting de los datos seria neceario poder compararlo contra otro conjunto de informacion que no haya sido utilizada en el conjunto de entrenamiento. 
+
+
+### Cross Validation
+
+```{r echo=FALSE, include=FALSE }
+
+library(h2o)
+library(dplyr)
+
+# start up h2o
+h2o.no_progress()
+h2o.init()
+
+# create feature names
+y <- "tipoDeCasa"
+x <- setdiff(names(train2), y)
+
+# h2o cannot ingest ordered factors
+train2.h2o <- train2 %>%
+  mutate_if(is.factor, factor, ordered = FALSE) %>%
+  as.h2o()
+
+# train model
+nb.h2o <- h2o.naiveBayes(
+  x = x,
+  y = y,
+  training_frame = train2.h2o,
+  nfolds = 10,
+  laplace = 0
+)
+
+# assess results
+confusionMatrixCrossValidationTrain <- h2o.confusionMatrix(nb.h2o)
+
+
+```
+
+#### - Matriz de Validacion Cruzada
+
+Aqui podemos apreciar la matriz de confusion del conjunto de datos de entrenamiento para la validacion cruzada.
+
+```{r}
+confusionMatrixCrossValidationTrain
+```
+
+
+```{r echo=FALSE, include=FALSE}
+
+# do a little preprocessing
+preprocess <- preProcess(train2, method = c("BoxCox", "center", "scale"))
+train_pp   <- predict(preprocess, train2)
+test_pp    <- predict(preprocess, test2)
+
+# convert to h2o objects
+train_pp.h2o <- train_pp %>%
+  mutate_if(is.factor, factor, ordered = FALSE) %>%
+  as.h2o()
+
+test_pp.h2o <- test_pp %>%
+  mutate_if(is.factor, factor, ordered = FALSE) %>%
+  as.h2o()
+
+# get new feature names --> PCA preprocessing reduced and changed some features
+x <- setdiff(names(train_pp), "tipoDeCasa")
+
+
+# create tuning grid
+hyper_params <- list(
+  laplace = seq(0, 5, by = 0.5)
+  )
+
+# build grid search 
+grid <- h2o.grid(
+  algorithm = "naivebayes",
+  grid_id = "nb_grid",
+  x = x, 
+  y = y, 
+  training_frame = train_pp.h2o, 
+  nfolds = 10,
+  hyper_params = hyper_params
+  )
+
+# Sort the grid models by mse
+sorted_grid <- h2o.getGrid("nb_grid", sort_by = "accuracy", decreasing = TRUE)
+
+# grab top model id
+best_h2o_model <- sorted_grid@model_ids[[1]]
+best_model <- h2o.getModel(best_h2o_model)
+
+# confusion matrix of best model
+confusionMatrixCrossValidationTest <- h2o.confusionMatrix(best_model)
+
+```
+
+Para cada grupo de entrenamiento se obtuvo la siguiente exactitud: 
+
+```{r echo=FALSE}
+sorted_grid
+```
+
+Luego pasamos al conjunto de prueba.
+
+```{r}
+confusionMatrixCrossValidationTest
+```
+
+Finalmente evaluamos la eficiancia del algoritmo.
+
+```{r}
+# evaluate on test set
+h2o.performance(best_model, newdata = test_pp.h2o)
+```
+
+Debajo podemos apreciar los el set de datos de prueba y las predicciones que el algoritmo brindo para cada 1.
+
+```{r}
+# predict new data
+predict <- h2o.predict(nb.h2o, newdata = test_pp.h2o)
+predict
+```
+
+```{r echo=FALSE, warning=FALSE}
+# ROC curve
+auc <- h2o.auc(best_model, xval = TRUE)
+fpr <- h2o.performance(best_model, xval = TRUE)
+tpr <- h2o.performance(best_model, xval = TRUE)
+
+h2o.auc(nb.h2o)
+
+```
+
+```{r include=FALSE, echo=FALSE}
+# shut down h2o
+h2o.shutdown(prompt = FALSE)
+
+
+```
+
+##Comparacion entre resultados
+En este caso al comparar el resultado de la Validacion Cruzada con Naive Bayes podemos darnos cuenta que
+en nivel de accuracy en Naive Bayes fue del 95% esto nos indica que el algoritmo esta muy bien entrenado a entender como funionan el comportamiento de los datos del algoritmo. 
+
+Por otro lado tenemos que la Validacion Cruzada lanzo un accuraccy del 62%, sin embargo este algoritmo no nos presento el mismo problema que Naive Bayes, pues al tener una accuracy tan alta corremos un alto riesgo de Overfitting. En este caso podemos determinar que una menor cantidad de datos al conjunto de entrenamiento puede que nos de un nivel de exactitud mas bajo sin embargo entre mas datos se le brinden al algortimo para entrenar este ira mejorando su nivel de exactitud, corriendo un menor riesgo de que el algortimo se acomode unicamente a ese set de datos. 
+
+Para determinar que algoritmo fue mejor para predecir seria ideal poder contar con otro set de datos y comprobar los datos lanzados por ambos algoritmos de predicciones versus el dataset nuevo. En este caso tenemos que el algoritmo de Naive Bayes, pues este presenta un nivel de exactitud mucho mayor con una menor cantidad de datos, pero se corre el riesgo de que el algoritmo tenga un overfitting.
+
+En cuanto a tiempo de procesamiento tenemos que Naive Bayes se proceso un poco mas rapido que la Validacion Cruzada, sin embargo la diferencia fue de apenas unos 3 - 5 segundos aproximadamente, lo cual no es una diferencia tan significativa como para poder ser tomada en cuenta en cuestion de eficiencia  
+

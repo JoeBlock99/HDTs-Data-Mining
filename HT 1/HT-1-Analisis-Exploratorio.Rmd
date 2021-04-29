@@ -1,0 +1,251 @@
+---
+title: "HT-1-Analisis-Exploratorio"
+author: "Juan De Leon, Maria Jose Castro, Jose Block"
+date: "2/8/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r include=FALSE}
+dataframe = read.csv("./Data/tmdb-movies.csv")
+```
+
+## Ejercicios
+
+1. Haga una exploración rápida de sus datos, para eso haga un resumen de su conjunto de datos.
+```{r echo=FALSE}
+summary(dataframe)
+```
+
+2. Diga el tipo de cada una de las variables (cualitativa ordinal o nominal, cuantitativa continua, cuantitativa discreta).
+```{r echo=FALSE}
+data.frame("Variable"=c(colnames(dataframe)), "Tipo de Variable"=c("N/A", "N/A", "Cuantitativa Continua", "Cuantitativa Discreta", "Cuantitativa Discreta", "Cualitativa Nominal", "Cualitativa Nominal", "Cualitativa Nominal", "Cualitativa Nominal", "Cualitativa Nominal", "Cualitativa Nominal", "Cualitativa Nominal", "Cuantitativa Discreta", "Cualitativa Nominal", "Cualitativa Nominal", "Cuantitativa Discreta", "Cuantitativa Discreta", "Cuantitativa Continua", "Cuantitativa Discreta", "Cuantitativa Continua", "Cuantitativa Continua"))
+```
+3. Investigue si las variables cuantitativas siguen una distribución normal y haga una tabla de frecuencias de las variables cualitativas. Explique todos los resultados.
+
+```{r echo=FALSE}
+popularity <- rnorm(dataframe$popularity)
+hist(popularity, main="Distribucion de Popularity")
+budget <- rnorm(dataframe$budget)
+hist(budget, main="Distribucion de budget")
+revenue <- rnorm(dataframe$revenue)
+hist(revenue, main="Distribucion de revenue")
+runtime <- rnorm(dataframe$runtime)
+hist(runtime, main="Distribucion de runtime")
+vote_count <- rnorm(dataframe$vote_count)
+hist(vote_count, main="Distribucion de vote_count")
+vote_average <- rnorm(dataframe$vote_average)
+hist(vote_average, main="Distribucion de vote_average")
+budget_adj <- rnorm(dataframe$budget_adj)
+hist(budget_adj, main="Distribucion de budget_adj")
+revenue_adj <- rnorm(dataframe$revenue_adj)
+hist(revenue_adj, main="Distribucion de revenue_adj")
+```
+
+* Debido a que las tablas de frecuencia son muy grandes dejamos indicado como se obentrian todas las tablas de frecuencia de las variables cualitativas.
+
+```
+table(dataframe$original_title)
+table(dataframe$cast)
+table(dataframe$homepage)
+table(dataframe$director)
+table(dataframe$tagline)
+table(dataframe$keywords)
+table(dataframe$overview)
+table(dataframe$genreS)
+table(dataframe$production_companies)
+```
+
+4. Responda las siguientes preguntas:
+    - ¿Cuáles son las 10 películas que contaron con más presupuesto?
+    ```{r echo=FALSE, include=FALSE}
+    library(dplyr)
+    ```
+    ```{r echo=FALSE}
+    head(dataframe[order(-dataframe$budget),], 10)[, c("id", "original_title", "budget"), drop=FALSE]
+    ```
+    - ¿Cuáles son las 10 películas que más ingresos tuvieron?
+    ```{r echo=FALSE}
+    head(dataframe[order(-dataframe$revenue),], 10)[, c("id", "original_title", "revenue"), drop=FALSE]
+    ```
+    - ¿Cuál es la película que más votos tuvo?
+    ```{r echo=FALSE}
+    head(dataframe[order(-dataframe$vote_count),], 1)[, c("id", "original_title", "vote_count"), drop=FALSE]
+    ```
+    - ¿Cuál es la peor película de acuerdo a los votos de todos los usuarios?
+    ```{r echo=FALSE}
+    head(dataframe[order(dataframe$vote_average),], 2)[, c("id", "original_title", "vote_average"), drop=FALSE]
+    ```
+    - ¿Cuántas películas se hicieron en cada año? ¿En qué año se hicieron más películas? Haga un gráfico de barras
+    ```{r echo=FALSE}
+    library(dplyr)
+    library(ggpubr)
+    ```
+    ```{r echo=FALSE}
+    releases_per_year <- data.frame(tally(group_by(dataframe, release_year)))
+    releases_per_year
+    barplot(releases_per_year$n, names.arg = releases_per_year$release_year)
+    head(releases_per_year[order(-releases_per_year$n),], 1)[,, drop=FALSE]
+    ```
+    - ¿Cuál es el género principal de las 20 películas más populares?
+    -Para esto se separo la lista de los generos y solo se tomo en cuenta el primero de la lista. 
+```{r echo=FALSE, warning=FALSE}
+library(tidyr)
+library(ggplot2)
+movies<-read.csv("./Data/tmdb-movies.csv")
+popular20_ <- head(movies[order(movies$popularity, decreasing = TRUE),],20)
+#obtenemos el genero con la funcion separate y contamos
+pf<- popular20_ %>% separate(genres, c("p_genre", "SE_genre", "3_genre", NA), sep="([|?:])")
+table(pf$p_genre)
+```
+    
+    - ¿Cuál es el género que predomina en el conjunto de datos? Represéntelo usando un gráfico
+    - En este cao el genero mass comun es las peliculas de drama. Se separaron por genero.
+```{r echo=FALSE, warning=FALSE}
+pg <- movies %>% separate(genres, c("p_genre", "SE_genre", "3_genre", NA), sep="([|?:])")
+#plot de los generos
+barplot(
+  table(pg$p_genre),
+  main="Géneros más comunes",
+  col=rainbow(15),
+  las = 2,
+  xlab="Géneros",  
+  ylab="Cantidad de Peliculas",
+  xlim=c(0,25),
+  ylim=c(0,2500)
+  )
+
+```
+    
+    - ¿Las películas de qué genero principal obtuvieron mayores ganancias?
+    - Las peliculas de Aventura son las que mas ganacias dan a los estudias, para poder hacer esto se separaron los generos de cada pelicula. Luego se creo el promedio de gancias por genero y se grafico.
+```{r echo=FALSE, warning=FALSE}
+ph<-pg[order(movies$revenue, decreasing = TRUE),]
+result<-aggregate(ph[5], list(ph$p_genre), mean )
+phr<-result[-c(1),]
+#View(phr)
+barplot(phr$revenue,
+        las= 2,
+        names.arg =phr$Group.1,
+        main="Las peliculas con mayores ganacias",
+        col=rainbow(15),
+        xlab="Géneros",  
+        ylab="Total",
+        xlim=c(0,25),
+        ylim=c(0,	124755984.2)
+        
+        )
+```
+    
+    - ¿Las películas de qué genero principal necesitaron mayor presupuesto?
+- Las peliculas de Aventura son las que mas presupuesto requieren, para poder hacer esto se separaron los generos de cada pelicula. Luego se creo el promedio re presupuesto por genero y se grafico.
+```{r echo=FALSE, warning=FALSE}
+budget<- movies %>% separate(genres, c("p_genre", "SE_genre", "3_genre", NA),)
+#View(budget)
+orderBud<-budget[order(movies$budget, decreasing = TRUE),]
+#head(orderBud)
+#View(orderBud)
+resultI<-aggregate(orderBud[4], list(ph$p_genre),mean)
+#View(resultI)
+pi<-resultI[-c(1),]
+#View(pi)
+#table(pi)
+barplot(resultI$budget,
+        las =2,
+        names.arg =resultI$Group.1,
+        
+        main="Las peliculas con mayor presupuesto",
+        col=rainbow(15),
+        xlab="Géneros",  
+        ylab="Presupuesto",
+        xlim=c(0,25),
+        ylim=c(0, 45000000)
+)
+```
+    
+    - ¿Quiénes son los 20 mejores directores que hicieron películas altamente calificadas?
+```{r echo=FALSE, warning=FALSE}
+pj<- head(movies[order(movies$vote_average, decreasing = TRUE),],20,na.rm = TRUE)
+#View(pj)
+#Aqui contamos las que corresponden a cada director
+table(pj$director)
+```
+    
+    - ¿Cómo se correlacionan los presupuestos con los ingresos? ¿Los altos presupuestos significan altos ingresos? Haga los gráficos que necesite, histograma, diagrama de dispersión
+```{r echo=FALSE, warning=FALSE}
+ggscatter(movies, x = "budget", y = "revenue", 
+add = "reg.line", conf.int = TRUE, 
+cor.coef = TRUE, cor.method = "pearson",
+xlab = "Presupuesto", ylab = "Ingresos")
+```
+
+
+A pesar de que la correlacion sea de 0.73, por la forma en la que el grafico de dispersion se exparse, resulta dificil concluir. Pero nuestra conclusion es no, hay lanzamientos con muy poco presupuesto, pero con un alto ingreso comparado con el presupuesto. Tambien hay otros que cuentan con un presupuesto monstruoso pero con un ingreso en casi 0. Depende mucho de la tematica de la pelicula. Consideramos que es cuestion de habilidad sobre presupuesto.    
+    
+    
+    - ¿Se asocian ciertos meses de lanzamiento con mejores ingresos?
+```{r echo=FALSE, warning=FALSE}
+movies$release_date <- as.Date(movies$release_date, "%m/%d/%Y")
+movies$Month <- format(movies$release_date , "%m")
+mothmean<-aggregate(movies[5], list(movies$Month), mean)
+yValue <- mothmean$revenue
+xValue<-mothmean$Group.1
+barplot(yValue,names.arg=xValue,xlab="Month",ylab="Revenue",col="blue", main="Revenue mean per month",border="red")
+
+```
+Segun el grafico de la media de ingresos por mes el mes con mayor ingresos es junio seguido de mayo. Es importante saber que un dato atipico extremo puede cambiar la media de un mes sustancialmente. 
+    - ¿En qué meses se han visto los lanzamientos máximos?
+```{r echo=FALSE, warning=FALSE}
+plot(movies$Month, movies$revenue, main="Dispersion de Iingresos por mes",
+xlab="Meses", ylab="Ingresos", pch=19)
+
+lanzamientospormes<-rep(movies$Month)
+lpm<-table(lanzamientospormes)
+barplot(lpm,main="Lanzamientos por Mes", xlab="Meses",ylab="Lanzamientos",,ylim=c(0,1400))
+```
+
+
+
+En la primer grafico de dispercion podemos notar los datos atipicos extremos por cada mes. Esto nos da una idea de como se ve afectada la media de ingresos por mes. Se puede ver que el dato mas alto esta en diciembre, se trata de Avatar.
+
+Por otro lado se hizo un grafico de lanzamientos por mes y hay una anomalia en el comportamiento, hay mas lanzamientos en el mes que menos ingresos hay. Esto puede deberse a que como hay una cantidad de lanzamientos significativamente mayor, esto puede disminuir la efectividad de cada lanzamiento individualmente.
+    
+    
+    
+    
+    - ¿Cómo se correlacionan las calificaciones con el éxito comercial?
+```{r echo=FALSE, warning=FALSE}
+ggscatter(movies, x = "vote_average", y = "revenue", 
+add = "reg.line", conf.int = TRUE, 
+cor.coef = TRUE, cor.method = "spearman",
+xlab = "Promedio de votos", ylab = "Ingresos")
+
+ggscatter(movies, x = "vote_count", y = "revenue", 
+add = "reg.line", conf.int = TRUE, 
+cor.coef = TRUE, cor.method = "spearman",
+xlab = "Promedio de votos", ylab = "Ingresos")
+```
+
+
+
+
+En el primer grafico de dispercion podemos notar que hay una correlacion muy baja(0.19) entre los ingresos y el promedio de votos. Por otro lado podemos ver el grafico que le sigue y tenemos una correlacion considerable de 0.68 entre los ingresos y la cantidad de votos, demostrando que a mayores vistas, mayor ingreso.
+
+
+
+    
+    - ¿A qué género principal pertenecen las películas más largas?
+```{r echo=FALSE, warning=FALSE}
+pg <- movies %>% separate(genres, c("p_genre", "SE_genre", "3_genre", NA), sep="([|?:])")
+runtimemean<-aggregate(pg[13], list(pg$p_genre), mean)
+barplot(runtimemean$runtime, names.arg = runtimemean$Group.1,main="Runtime mean per genre", xlab="",ylab="Runtime", las= 2,ylim=c(0,140))
+```
+    
+    
+    
+El genero pincipal al que pertenecen las peliculas mas extensas son las peliculas de historia, seguido de las peliculas de guerra como se muestra en el grafico de "Runtime mean per genre"   
+    
+    
